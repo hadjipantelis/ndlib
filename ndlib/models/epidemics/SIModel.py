@@ -74,7 +74,7 @@ class SIModel(DiffusionModel):
                     "status_delta": status_delta.copy(),
                 }
             
-        has_weights = nx.is_weighted(self.graph)
+        has_weights = self.graph_has_weights
         for u in self.graph.nodes:
             u_status = self.status[u]
             eventp = np.random.random_sample()
@@ -92,9 +92,11 @@ class SIModel(DiffusionModel):
                     use_tp = self.params["model"]["tp_rate"] == 1
                     if use_tp:
                         if has_weights:
+                            all_weights = self.graph.get_edge_attributes("weight")
                             # Use weighted sum 
                             neighbor_weights = np.array([
-                                self.graph[v][u]["weight"] 
+                                # self.graph[v][u]["weight"] 
+                                all_weights[(v,u)]
                                 for v in infected_neighbors
                             ])
                             infection_prob = 1 - (1 - beta) ** np.sum(neighbor_weights)
