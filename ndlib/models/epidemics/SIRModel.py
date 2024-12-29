@@ -79,6 +79,47 @@ class SIRModel(DiffusionModel):
 
         for u in self.active:
 
+         legacy=False
+         if not legacy:
+
+            if self.status[u] != 1:  # Only process infected nodes
+                continue
+
+            # Get susceptible neighbors based on graph direction
+            if self.graph.directed:
+                neighbors = self.graph.successors(u)
+            else:
+                neighbors = self.graph.neighbors(u)
+            
+            susceptible_neighbors = [v for v in neighbors if self.status[v] == 0]
+
+            # Try to infect each susceptible neighbor
+            beta = self.params["model"]["beta"]
+            use_tp = self.params["model"]["tp_rate"] == 1
+
+
+            for v in susceptible_neighbors:
+                eventp = np.random.random_sample()
+                
+                if use_tp and self.graph_has_weights:
+                    # Get edge weights
+                    all_weights = self.graph.get_edge_attributes("weight")
+                    edge_weight = all_weights[(u,v)]  # Note: switched from (v,u) to (u,v) since u is infecting v (unlike this SIModel implementation)
+                    infection_prob = 1 - (1 - beta) ** edge_weight
+                else:
+                    # Note: A bit unclear on how this is not using tp originally anyway, PH keeps it for compatibility.
+                    infection_prob = beta
+                 
+                if eventp < infection_prob:
+                    actual_status[v] = 1
+            
+            # Check if infected node recovers
+            gamma = self.params["model"]["gamma"]
+            if np.random.random_sample() < gamma:
+                actual_status[u] = 2
+            # End
+         else:
+            
             u_status = self.status[u]
 
             if u_status == 1:

@@ -78,9 +78,10 @@ class SIModel(DiffusionModel):
         for u in self.graph.nodes:
             u_status = self.status[u]
             eventp = np.random.random_sample()
-            neighbors = self.graph.neighbors(u)
             if self.graph.directed:
                 neighbors = self.graph.predecessors(u)
+            else: 
+                neighbors = self.graph.neighbors(u)
 
             if u_status == 0: 
                 infected_neighbors = [v for v in neighbors if self.status[v] == 1]
