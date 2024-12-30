@@ -79,9 +79,6 @@ class SIRModel(DiffusionModel):
 
         for u in self.active:
 
-         legacy=False
-         if not legacy:
-
             if self.status[u] != 1:  # Only process infected nodes
                 continue
 
@@ -118,29 +115,7 @@ class SIRModel(DiffusionModel):
             if np.random.random_sample() < gamma:
                 actual_status[u] = 2
             # End
-         else:
-            
-            u_status = self.status[u]
-
-            if u_status == 1:
-
-                if self.graph.directed:
-                    susceptible_neighbors = [
-                        v for v in self.graph.successors(u) if self.status[v] == 0
-                    ]
-                else:
-                    susceptible_neighbors = [
-                        v for v in self.graph.neighbors(u) if self.status[v] == 0
-                    ]
-                for v in susceptible_neighbors:
-                    eventp = np.random.random_sample()
-                    if eventp < self.params["model"]["beta"]:
-                        actual_status[v] = 1
-
-                eventp = np.random.random_sample()
-                if eventp < self.params["model"]["gamma"]:
-                    actual_status[u] = 2
-
+    
         delta, node_count, status_delta = self.status_delta(actual_status)
         self.status = actual_status
         self.actual_iteration += 1
