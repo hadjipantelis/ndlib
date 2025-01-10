@@ -104,46 +104,58 @@ class SISModel(DiffusionModel):
         else:
 
             has_weights = self.graph_has_weights
-            for u in self.graph.nodes:
+            beta = self.params["model"]["beta"]
+            lambda_recovery = self.params["model"]["lambda"]
+            use_tp = self.params["model"]["tp_rate"] == 1
+            actual_status = self.status.copy()  # Assuming `actual_status` starts as a copy of `self.status`.
+
+            # Pre-fetch edge weights if needed
+            all_weights = self.graph.get_edge_attributes("weight") if has_weights else None
+
+            # Precompute neighbors for all nodes
+            if self.graph.directed:
+                neighbors_dict = {u: list(self.graph.predecessors(u)) for u in self.graph.nodes}
+            else:
+                neighbors_dict = {u: list(self.graph.neighbors(u)) for u in self.graph.nodes}
+
+            # Precompute random numbers for all nodes
+            random_numbers = np.random.random_sample(len(self.graph.nodes))
+
+            for idx, u in enumerate(self.graph.nodes):
                 u_status = self.status[u]
-                eventp = np.random.random_sample()
-                if self.graph.directed:
-                    neighbors = self.graph.predecessors(u)
-                else: 
-                    neighbors = self.graph.neighbors(u)
+                eventp = random_numbers[idx]
 
-                if u_status == 0: 
+                if u_status == 0:  # Susceptible
+                    # Get neighbors depending on graph type
+                    neighbors = neighbors_dict[u]
+
+                    # Find infected neighbors
                     infected_neighbors = [v for v in neighbors if self.status[v] == 1]
-                    triggered = 1 if len(infected_neighbors) > 0 else 0
+                    if not infected_neighbors:
+                        continue  # Skip if no infected neighbors
 
-                    if triggered == 1:
-                        # Calculate infection probability
-                        beta = self.params["model"]["beta"]
-                        use_tp = self.params["model"]["tp_rate"] == 1
-                        if use_tp:
-                            if has_weights:
-                                all_weights = self.graph.get_edge_attributes("weight")
-                                # Use weighted sum 
-                                neighbor_weights = np.array([
-                                    # self.graph[v][u]["weight"] 
-                                    all_weights[(v,u)]
-                                    for v in infected_neighbors
-                                ])
-                                infection_prob = 1 - (1 - beta) ** np.sum(neighbor_weights)
-                            else:
-                                # Use neighbor count 
-                                infection_prob = 1 - (1 - beta) ** len(infected_neighbors)
+                    # Compute infection probability
+                    if use_tp:
+                        if has_weights:
+                            # Weighted sum of neighbor infections
+                            # Accumulate weights once
+                            total_weight = sum(all_weights.get((v, u), 1.0) for v in infected_neighbors)
+                            infection_prob = 1 - (1 - beta) ** total_weight
                         else:
-                            # Simple infection process
-                            infection_prob = beta
-                
-                        # Determine if infection happens
-                        actual_status[u] = 1 if eventp < infection_prob else 0
-                
-                elif u_status == 1:
-                    # Determine if recovery happens
-                    if eventp < self.params["model"]["lambda"]:
+                            # Use count of infected neighbors
+                            infection_prob = 1 - (1 - beta) ** len(infected_neighbors)
+                    else:
+                        infection_prob = beta  # Simple infection process
+
+                    # Update infection status
+                    if eventp < infection_prob:
+                        actual_status[u] = 1
+
+                elif u_status == 1:  # Infected
+                    # Check for recovery
+                    if eventp < lambda_recovery:
                         actual_status[u] = 0
+
 
         delta, node_count, status_delta = self.status_delta(actual_status)
         self.status = actual_status
